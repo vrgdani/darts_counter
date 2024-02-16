@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Darts Game</title>
+    <style>
+      :root {
+    --char-w: 1ch;
+    --gap: calc(0.2 * var(--char-w));
+    --n-char: 3;
+    --in-w: calc(var(--n-char) * (var(--char-w) + var(--gap)));
+}
+      
+        body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background-color: #f5f5f5;
+    display: flex;
+    flex-direction: column; /* Stack items vertically */
+    align-items: flex-start; /* Align items to the start (left) */
+    height: 99.5vh; /* Set the body height to 100% of viewport height */
+    overflow: hidden; /* Disable scrolling */
+}
+        h1 {
+            color: #333;
+        }
+        #playerName {
+            padding: 5px;
+            font-size: 16px;
+        }
+        #addPlayerBtn {
+            padding: 5px 10px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        #game-board {
+    display: flex;
+    flex-direction: column; /* Stack player boxes vertically */
+    align-items: stretch; /* Stretch player boxes to the full width of the container */
+    width: 61%; /* Set the width to 100% of the screen */
+    height: 99%;
+}
+        
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .player,
+.current-player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid black;
+    padding: 10px;
+    margin: 0;
+    width: 92.25%;
+    height: 49%;
+    background-color: black;
+    border-radius: 5px;
+    color: white;
+  	font-size: 40px;
+}
+
+.current-player {
+    background-color: green;
+}
+
+      
+      .modal {
+        	display: none;
+            position: fixed;
+			height: 97%;
+        	top: 50%;
+        	width: 40%;
+            right: 0; /* Fixed on the right */
+            transform: translate(0, -50%);
+            background-color: #fff;
+            padding: 20px;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            z-index: 1; /* Ensure the modal appears above other elements */
+        	max-width: 2000px;
+        }
+
+        .modal-content {
+    text-align: center;
+    margin-top: 27%;
+}
+
+.modal-content label,
+.modal-content input,
+.modal-content button {
+    margin-bottom: 10px;
+    font-size: 40px;
+}
+
+.modal-content input {
+    display: block;
+    margin: 2em auto;
+    border: none;
+    padding: 0;
+  	width: 80%;
+    width: var(--in-w);
+    background: repeating-linear-gradient(
+        90deg, 
+        dimgrey 0, dimgrey var(--char-w), 
+        transparent 0, transparent calc(var(--char-w) + var(--gap))
+    ) 0 100%/ calc(var(--in-w) - var(--gap)) 2px no-repeat;
+    font: 5ch Droid Sans Mono, Consolas, monospace;
+    letter-spacing: var(--gap);
+    font-size: 50px;
+}
+
+
+      
+      
+     /* Focus styles for the modal input */
+.modal-content input:focus {
+    outline: none;
+    color: black;
+}
+
+.modal-content button {
+    padding: 15px 30px;
+}
+
+.close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    cursor: pointer;
+  	display: none; /* Initially hide the close icon */
+}
+    </style>
+</head>
+<body>
+    
+    <div class="start" id="player-input-container">
+      <h1>Colos' Darts Counter</h1>
+    <label for="playerName">Add Player:</label>
+    <input type="text" id="playerName" placeholder="Player Name">
+     
+    <button id="addPlayerBtn" onclick="addPlayer()">Add Player</button>
+      
+      <label for="initialScore">Set score:</label>
+<input type="number" id="initialScore" placeholder="Enter Initial Score">
+
+      <button onclick="startGame()">Start Game</button>
+</div>
+
+    <div id="game-board"></div>
+
+<!-- Custom Modal for User Input -->
+<div id="custom-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <label for="throwInput">Enter the sum of your throws:</label>
+        <input maxlength='3' type="text" id="throwInput" placeholder="999" oninput="validateInput(event)" onkeypress="handleKeyPress(event)">
+        <button onclick="handleThrow()">Submit</button>
+        <button style="background-color: red;" onclick="undoAction()">Undo</button>
+    </div>
+</div>
+
+
+    <script>
+        let players = [];
+        let currentPlayerIndex = 0;
+        let initialScore = 501;
+        let actionHistory = [];
+
+        function addPlayer() {
+    const playerName = document.getElementById('playerName').value;
+    if (playerName.trim() !== '') {
+        players.push({
+            name: playerName,
+            score: [], // Do not set the initialScore here
+            throws: [],
+            averageScore: 0,
+        });
+        document.getElementById('playerName').value = '';
+        updateGameBoard();
+    }
+}
+
+        function updateGameBoard() {
+            const gameBoard = document.getElementById('game-board');
+            gameBoard.innerHTML = '';
+
+            players.forEach((player, index) => {
+                const playerDiv = document.createElement('div');
+                playerDiv.classList.add('player');
+
+                const playerNameElement = document.createElement('strong');
+                playerNameElement.textContent = player.name;
+
+                const scoreElement = document.createElement('span');
+                scoreElement.innerHTML = `Score: <strong>${player.score}</strong> | Average: ${player.averageScore.toFixed(2)}`;
+
+                const throwHistoryElement = document.createElement('div');
+        		throwHistoryElement.innerHTML = `Throw History: ${player.throws.join(', ')}`;
+        		throwHistoryElement.style.fontSize = '16px'; // Set the desired font size
+              	throwHistoryElement.style.marginTop = '10%'; // Set the desired margin-top
+
+                if (index === currentPlayerIndex) {
+                    playerDiv.classList.add('current-player');
+                    // Set the font size dynamically based on your requirements
+                    playerDiv.style.fontSize = index === currentPlayerIndex ? '60px' : '40px';
+                }
+
+                playerDiv.appendChild(playerNameElement);
+                playerDiv.appendChild(document.createElement('br'));
+                playerDiv.appendChild(scoreElement);
+                playerDiv.appendChild(document.createElement('br'));
+                playerDiv.appendChild(throwHistoryElement);
+
+                gameBoard.appendChild(playerDiv);
+            });
+        }
+
+        function startGame() {
+    const initialScoreInput = document.getElementById('initialScore');
+    const userEnteredScore = parseInt(initialScoreInput.value);
+
+    if (isNaN(userEnteredScore) || userEnteredScore <= 0) {
+        alert("Please enter a valid initial score greater than 0.");
+        return;
+    }
+
+    initialScore = userEnteredScore; // Update the initial score
+
+    // Update the scores of existing players with the new initial score
+    players.forEach(player => {
+        player.score = initialScore;
+    });
+
+    initialScoreInput.disabled = true; // Disable the input field once set
+
+    if (players.length < 1) {
+        alert("Add at least one player before starting the game.");
+        return;
+    }
+
+    // Update the game board with the new initial score
+    updateGameBoard();
+
+    // Hide the player input container
+    document.getElementById('player-input-container').style.display = 'none';
+
+    // Show the modal
+    openModal();
+
+    // Start the game after a short delay
+    setTimeout(playTurn, 100);
+}
+
+        function handleThrowInput() {
+    const currentPlayer = players[currentPlayerIndex];
+    const throwInput = parseInt(document.getElementById('throwInput').value);
+
+    if (!isNaN(throwInput)) {
+        // Store the current state before making any changes
+        const currentState = {
+            players: [...players],
+            currentPlayerIndex,
+            action: 'throw',
+            bust: false, // Initialize bust to false
+        };
+
+        // Check for bust condition
+        if (throwInput > currentPlayer.score || currentPlayer.score - throwInput === 1) {
+            currentState.bust = true;
+        }
+
+        actionHistory.push(currentState);
+
+        currentPlayer.throws.push(throwInput);
+        const throwsCount = currentPlayer.throws.length;
+        const throwsSum = currentPlayer.throws.reduce((sum, score) => sum + score, 0);
+        
+        // Only include the throw in the average if it didn't result in a bust
+        if (!currentState.bust) {
+            currentPlayer.averageScore = throwsSum / throwsCount;
+        }
+
+        const originalScore = currentPlayer.score;
+        currentPlayer.score -= throwInput;
+
+        if (currentPlayer.score === 0) {
+            const doubleOutConfirmation = confirm(`${currentPlayer.name}, did you get a double out?`);
+
+            if (doubleOutConfirmation) {
+                alert(`${currentPlayer.name} wins!`);
+                resetGame();
+            } else {
+                alert(`${currentPlayer.name} busted! Score reset to ${originalScore}.`);
+                currentPlayer.score = originalScore;
+                currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+                updateGameBoard();
+            }
+        } else if (currentPlayer.score === 1 || currentPlayer.score < 0) {
+            alert(`${currentPlayer.name} busted! Score reset to ${originalScore}.`);
+            currentPlayer.score = originalScore;
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            updateGameBoard();
+        } else {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            updateGameBoard();
+        }
+    } else {
+        alert('Invalid input. Please enter a valid number.');
+    }
+
+    // Close the custom modal after a slight delay
+    setTimeout(() => {
+        closeModal();
+        // Start the next turn after closing the modal
+        setTimeout(playTurn, 0);
+    }, 0);
+}
+
+
+        function validateInput(event) {
+    const throwInput = document.getElementById('throwInput');
+    const inputValue = throwInput.value.trim();
+
+    // Check if the input is a valid number or empty
+    if (inputValue.length > 0 && !/^\d+$/.test(inputValue)) {
+        // If not a valid number and not empty, clear the input field
+        throwInput.value = '';
+        alert('Please enter a valid number.');
+    }
+}
+
+
+        function undoAction() {
+            if (actionHistory.length > 0) {
+                const previousState = actionHistory.pop();
+                players = previousState.players;
+                currentPlayerIndex = previousState.currentPlayerIndex;
+                updateGameBoard();
+
+                // Check if the previous action was a turn-related action
+                if (previousState.action === 'throw') {
+                    const currentPlayer = players[currentPlayerIndex];
+                    const lastThrow = currentPlayer.throws.pop();
+
+                    // Only add the points back if the last throw did not result in a bust
+                    if (!previousState.bust) {
+                        currentPlayer.score += lastThrow;
+                    }
+
+                    const throwsCount = currentPlayer.throws.length;
+                    const throwsSum = currentPlayer.throws.reduce((sum, score) => sum + score, 0);
+                    currentPlayer.averageScore = throwsCount > 0 ? throwsSum / throwsCount : 0;
+
+                    const throwHistoryElement = document.querySelector('.current-player div:last-child');
+                    throwHistoryElement.innerHTML = `Throw History: ${currentPlayer.throws.join(', ')}`;
+
+                    const scoreElement = document.querySelector('.current-player span');
+                    scoreElement.innerHTML = `Score: <strong>${currentPlayer.score}</strong> | Average: ${currentPlayer.averageScore.toFixed(2)}`;
+
+                    const throwInput = document.getElementById('throwInput');
+                    throwInput.value = '';  // Clear previous input
+                    throwInput.focus();
+                }
+            }
+        }
+
+        function playTurn() {
+            const currentPlayer = players[currentPlayerIndex];
+
+            openModal();
+
+            document.getElementById('throwInput').value = '';
+            document.getElementById('throwInput').focus();
+
+            document.getElementById('custom-modal').querySelector('button').onclick = handleThrowInput;
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                handleThrowInput();
+            }
+        }
+
+        function openModal() {
+            const modal = document.getElementById('custom-modal');
+            modal.style.display = 'block';
+
+            const throwInput = modal.querySelector('#throwInput');
+            throwInput.value = '';
+            throwInput.focus();
+        }
+
+        function closeModal() {
+            document.getElementById('custom-modal').style.display = 'none';
+        }
+
+        function resetGame() {
+            players = [];
+            currentPlayerIndex = 0;
+            updateGameBoard();
+
+            document.getElementById('player-input-container').style.display = 'block';
+
+            closeModal();
+
+            const closeIcon = document.querySelector('.close');
+            closeIcon.style.display = 'block';
+
+            setTimeout(() => {
+                alert("");
+            }, 0);
+        }
+    </script>
+</body>
+</html>
